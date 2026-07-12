@@ -13,6 +13,7 @@ My submission for the **"Warm Up Before You Build"** pre-event challenge of the 
 | [warmup-agent/casting.yaml](warmup-agent/casting.yaml) | Foundry casting file used to self-host SigNoz via Docker Compose |
 | [warmup-agent/make_dashboard.py](warmup-agent/make_dashboard.py) | Creates the "Agent Health" dashboard via the SigNoz API |
 | [warmup-agent/shots*.py](warmup-agent/shots.py) | Playwright scripts that captured the screenshots |
+| [warmup-agent/mcp_demo.py](warmup-agent/mcp_demo.py) / [mcp_story.py](warmup-agent/mcp_story.py) | Raw JSON-RPC client for the SigNoz MCP server — the "AI agent debugging an AI agent" demo |
 | [warmup-agent/screenshots/](warmup-agent/screenshots) | Real screenshots from my self-hosted SigNoz |
 
 ## Reproduce it
