@@ -2,7 +2,7 @@
 
 *Warming up for the [Agents of SigNoz hackathon](https://www.wemakedevs.org/hackathons/signoz), I self-hosted SigNoz, pointed a tiny AI agent at it, and fell hard for one feature: the one-click jump from a slow trace span into the exact logs that explain it.*
 
-> **TL;DR** — My agent answered "what is 2 + 2" in **20.9 seconds**. Its own logs, read in isolation, looked perfectly healthy. In SigNoz, the trace flamegraph showed one span eating **18.31 s — 87.62% of the request** — and clicking that span's **Logs** tab revealed a silent retry loop I didn't know I'd shipped. Two clicks from symptom to root cause. That trace↔logs correlation is my favorite feature, and this post is the story of finding it. (Then I pointed SigNoz's **MCP server** at the same data and had an AI assistant re-run the whole investigation — down to the exact line number of the bug.)
+> **TL;DR** — My agent answered "what is 2 + 2" in **20.9 seconds**. Its own logs, read in isolation, looked perfectly healthy. In SigNoz, the trace flamegraph showed one span eating **18.31 s — 87.62% of the request** — and clicking that span's **Logs** tab exposed a silent retry loop that never once surfaced as an error. Two clicks from symptom to root cause. That trace↔logs correlation is my favorite feature, and this post is the story of finding it. (Then I pointed SigNoz's **MCP server** at the same data and had an AI assistant re-run the whole investigation — down to the exact line number of the bug.)
 
 ---
 
