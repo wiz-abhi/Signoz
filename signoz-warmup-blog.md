@@ -16,7 +16,9 @@ Spoiler: faster than I expected.
 
 ## Self-hosting SigNoz (~15 minutes, one gotcha)
 
-SigNoz's current install path is **Foundry**, its new installer CLI (the old `git clone && docker compose up` flow is deprecated as of v0.130). Three steps:
+SigNoz's current install path is **Foundry**, its new installer CLI. The old flow is gone — the docs are blunt about it: the legacy `install.sh` script and the bundled `deploy/` Compose files are ["deprecated as of SigNoz v0.130.0 and are no longer maintained or distributed"](https://signoz.io/docs/install/docker/). If you find a 2025 tutorial telling you to `git clone && docker compose up`, close the tab.
+
+**Prerequisites:** Docker, and a shell that can run the install script. That's genuinely it — no cloud account, no signup, no ingestion key. Then three steps:
 
 ```bash
 # 1. Install the foundryctl CLI
@@ -40,7 +42,7 @@ spec:
 foundryctl cast -f casting.yaml
 ```
 
-A couple of minutes later, `docker ps` showed the whole stack healthy — the SigNoz server, an OTel collector (the "ingester"), **ClickHouse** for storage, ClickHouse Keeper, and a Postgres metastore. UI on `http://localhost:8080`, OTLP ingestion on `4317` (gRPC) and `4318` (HTTP). No cloud account, no ingestion key; every byte of telemetry stays on my machine. (I'm on Windows 11 — Docker Desktop with the WSL2 backend, and the install script runs fine from Git Bash.)
+A couple of minutes later, `docker ps` showed the whole stack healthy — the SigNoz server, an OTel collector (the "ingester"), **ClickHouse** for storage, ClickHouse Keeper, and a Postgres metastore. UI on `http://localhost:8080`, OTLP ingestion on `4317` (gRPC) and `4318` (HTTP). Every byte of telemetry stays on my machine. (I'm on Windows 11 — Docker Desktop with the WSL2 backend, and the install script runs fine from Git Bash.)
 
 **The gotcha worth knowing:** my first OTLP exports were rejected with connection resets, and the ingester logs showed the collector stuck in an OpAMP error/restart loop. The cause was hilariously mundane — I hadn't created the admin account yet. SigNoz's collector gets its config via OpAMP from the server, and until the first user/org exists it has nothing to serve. The moment I signed up at `localhost:8080`, the collector settled and ingestion turned green. If your self-hosted collector seems broken on first boot: **create your account first.**
 
@@ -59,7 +61,9 @@ def answer(question: str) -> str:
     return llm("answer", f"Answer {question} using: {facts}")# LLM call #2
 ```
 
-For instrumentation I went OTel-native and hand-rolled spans following the **OpenTelemetry GenAI semantic conventions** — the emerging vendor-neutral standard (`gen_ai.*` attributes) for recording model names, token usage, agent steps, and tool calls. Every LLM call becomes a span carrying its contract with the outside world:
+For instrumentation I went OTel-native and hand-rolled spans following the **OpenTelemetry GenAI semantic conventions** — the vendor-neutral standard (`gen_ai.*` attributes) for recording model names, token usage, agent steps, and tool calls. One thing that cost me ten minutes of searching: these conventions **moved out of the main `semantic-conventions` repo** into their own home at [`open-telemetry/semantic-conventions-genai`](https://github.com/open-telemetry/semantic-conventions-genai), and the old `opentelemetry.io/docs/specs/semconv/gen-ai/` URL is now just a "this has moved" stub. The two pages you actually want are [gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md) (model calls) and [gen-ai-agent-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md) (agents and tool execution). They're still experimental, so expect attribute names to shift under you.
+
+Every LLM call becomes a span carrying its contract with the outside world:
 
 ```python
 with tracer.start_as_current_span(f"chat {MODEL}") as span:
@@ -119,7 +123,7 @@ The same story in the Logs Explorer, filtered to `trace_id = '359c33c37996f84f6c
 
 And there was my bug, in three lines: my search tool had a **silent retry loop** — a 3 s timeout and an aggressive exponential backoff against a flaky upstream. It always recovered by attempt three, so no error ever surfaced. The agent "worked." The user just waited 21 seconds. Only the *combination* — trace for where, logs for why, welded by a shared ID — told the whole story, in roughly two clicks and zero timestamp archaeology.
 
-The fix was two constants (cap the retries, fall back to cache fast). Next runs:
+The fix was three constants (cap the retries, shrink the backoff, fall back to cache fast). Next runs:
 
 ```text
 run 1: arithmetic: 2 + 2 = 4 (cached)  (3.6s)
@@ -156,9 +160,9 @@ Read the top-right and bottom-right panels together and the whole incident is vi
 
 ## One more thing: I let an AI agent read my telemetry
 
-SigNoz recently shipped an official **MCP server** — a Model Context Protocol bridge that lets any MCP-compatible AI assistant (Claude Code, Cursor, Gemini CLI…) query your observability data with natural tool calls. Since this hackathon is literally called *Agents of SigNoz*, I couldn't resist closing the loop: an AI agent debugging my AI agent.
+SigNoz [shipped an official **MCP server**](https://signoz.io/docs/ai/signoz-mcp-server/) — a Model Context Protocol bridge that lets any MCP-compatible AI assistant (Claude Code, Cursor, Gemini CLI…) query your observability data with natural tool calls. Since this hackathon is literally called *Agents of SigNoz*, I couldn't resist closing the loop: an AI agent debugging my AI agent.
 
-Setup was one Docker command plus a **read-only service account** (Settings → Service Accounts, `signoz-viewer` role — the MCP server only needs to read):
+Setup was one Docker command plus a **read-only service account** ([Settings → Service Accounts](https://signoz.io/docs/manage/administrator-guide/iam/service-accounts/) — the MCP server only needs to read):
 
 ```bash
 docker run -d -p 8000:8000 \
@@ -168,7 +172,11 @@ docker run -d -p 8000:8000 \
   signoz/signoz-mcp-server:latest
 ```
 
-That exposes **41 tools** — `signoz_list_services`, `signoz_search_traces`, `signoz_search_logs`, `signoz_query_metrics`, even `signoz_create_alert` and `signoz_create_dashboard`. I connected it to Claude Code and watched it re-run my entire investigation without touching the UI:
+**The gotcha that cost me half an hour:** I created the service account through the API (`POST /api/v1/service_accounts`) and passed a `role` field. The call returned `201 Created` and the role was silently dropped on the floor — so every single MCP call came back `403` with *"only viewers/editors/admins"*, which reads like a key problem when it's actually a role problem. The fix isn't in the request body: open the account in **Settings → Service Accounts → Roles**, add **`signoz-viewer`**, save. Then it works. If you're 403ing with a key you're certain is correct, go look at the role in the UI.
+
+Ask the running server what it can do and it answers for itself — `tools/list` returned **41 tools** on the `signoz/signoz-mcp-server:latest` image I pulled (it self-reports as version `dev`): `signoz_list_services`, `signoz_search_traces`, `signoz_search_logs`, `signoz_query_metrics`, even `signoz_create_alert` and `signoz_create_dashboard`. Worth noting the docs currently say 33 — this thing ships fast enough that the count in any blog post, this one included, is a snapshot. Ask your own instance rather than trusting my number.
+
+I connected it to Claude Code and watched it re-run my entire investigation without touching the UI:
 
 1. **"What services do I have?"** → `signoz_list_services`: one service, `warmup-agent`, 22 calls, **p99 21.7 s**, zero errors. (Zero errors! The agent is "healthy," remember?)
 2. **"Show me the slowest agent runs"** → `signoz_search_traces` with `duration_nano > 15s`: trace `359c33c3…`, 20.89 s — the exact trace from the flamegraph above, returned with a clickable `webUrl`.
@@ -184,6 +192,35 @@ An agent run *is* a trace: plan step, tool calls, reflection, answer — a tree 
 
 Traditional services fail loudly. Agents fail politely. You need the trace to notice, and the logs to understand.
 
+## Reproduce this yourself
+
+Everything above is one repo and about five minutes. You need Docker and Python 3.11+; an LLM key is optional, because the agent falls back to a local stub with realistic latency if it doesn't find one.
+
+```bash
+# 1. Self-host SigNoz
+curl -fsSL https://signoz.io/foundry.sh | bash
+git clone https://github.com/wiz-abhi/Signoz && cd Signoz
+foundryctl cast -f warmup-agent/casting.yaml
+```
+
+Now open `http://localhost:8080` and **create your admin account before doing anything else** — that's the OpAMP gotcha from earlier. Skip this and step 3 fails with connection resets.
+
+```bash
+# 2. Install the agent's dependencies
+cd warmup-agent
+python -m venv .venv
+.venv/Scripts/pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http openai  # Linux/macOS: .venv/bin/pip
+
+# 3. Run it — buggy first, then fixed
+export GEMINI_API_KEY=...                    # optional; omit to use the stub
+.venv/Scripts/python agent.py --runs 3       # the slow version, ~21s per answer
+.venv/Scripts/python agent.py --fixed --runs 5  # after the fix, ~2.6s
+```
+
+Then open the Traces Explorer, filter `durationNano >= 15s`, click the fat `tool search_tool` span, and hit its **Logs** tab. That's the whole post in one click.
+
+Two things that will bite you on Windows specifically: run the Foundry install script from **Git Bash**, not PowerShell (it's a bash script), and use `.venv/Scripts/` where the snippets above say `.venv/bin/`. The `--fixed` flag only moves three constants in [`agent.py`](https://github.com/wiz-abhi/Signoz/blob/main/warmup-agent/agent.py) — `max_retries`, `base_backoff`, and `timeout` — so you can watch the flamegraph collapse in real time.
+
 ## What I'm building for the main event
 
 This warm-up is becoming my Track 1 foundation: a multi-step, tool-calling agent with observability designed in from line one — per-step token and cost tracking via the GenAI conventions, alerts on runaway loops and token spikes, and a dashboard where every panel drills down to the exact trace (and therefore the exact logs) behind it. And now that I've seen the MCP server work, the loop I really want to build is *self-referential*: an agent that watches its own SigNoz telemetry and adjusts its behavior when it sees itself misbehaving. The warm-up was the rehearsal; now I know exactly which instrument carries the melody.
@@ -193,3 +230,5 @@ If you're on the fence about the hackathon: `foundryctl cast`, point anything yo
 ---
 
 *Everything here ran on my laptop: self-hosted SigNoz v0.132 via Foundry, OpenTelemetry Python SDK, Gemini (`gemini-3.1-flash-lite`) as the agent's brain, the SigNoz MCP server in Docker, and a ~140-line agent. Code, scripts, and all screenshots: [github.com/wiz-abhi/Signoz](https://github.com/wiz-abhi/Signoz). Written for the [Agents of SigNoz](https://www.wemakedevs.org/hackathons/signoz) warm-up challenge by [@wemakedevs](https://x.com/wemakedevs) and [SigNoz](https://signoz.io).*
+
+**AI assistance disclosure.** I used Claude as a coding assistant while building the agent and as an editor while structuring this post. Everything it describes is mine and actually happened: I ran the stack, hit the bugs, took every screenshot from my own SigNoz instance, and verified each claim against the live system or the linked docs before it went in. The trace IDs and numbers are real — you can reproduce them with the steps above. Claude also appears *in* the story, as the MCP client in the last section; that part was the fun of it.
