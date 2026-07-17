@@ -1,6 +1,6 @@
 # My AI Agent Took 21 Seconds to Answer "What Is 2 + 2" — SigNoz Found Out Why in Two Clicks
 
-*Warming up for the [Agents of SigNoz hackathon](https://www.wemakedevs.org/hackathons/signoz), I self-hosted SigNoz, pointed a tiny AI agent at it, and fell hard for one feature: the one-click jump from a slow trace span into the exact logs that explain it.*
+*Warming up for the [Agents of SigNoz hackathon](https://www.wemakedevs.org/hackathons/signoz), I self-hosted SigNoz, pointed a tiny AI agent at it, and fell hard for one feature: the one-click jump from a slow trace span into the exact logs that explain it. (2 + 2 is not supposed to be a load-bearing operation.)*
 
 > **TL;DR** — My agent answered "what is 2 + 2" in **20.9 seconds**. Its own logs, read in isolation, looked perfectly healthy. In SigNoz, the trace flamegraph showed one span eating **18.31 s — 87.62% of the request** — and clicking that span's **Logs** tab exposed a silent retry loop that never once surfaced as an error. Two clicks from symptom to root cause. That trace↔logs correlation is my favorite feature, and this post is the story of finding it. (Then I pointed SigNoz's **MCP server** at the same data and had an AI assistant re-run the whole investigation — down to the exact line number of the bug.)
 
@@ -10,15 +10,15 @@
 
 The hackathon's pre-event challenge — *Warm Up Before You Build* — asks you to self-host SigNoz, send it real telemetry, explore the product, and write about your favorite feature.
 
-I could have pointed it at a hello-world web app. But the main event is themed **agent observability**, and agents have a nasty property that makes them the perfect stress test for an observability tool: **they fail quietly**. No 500s, no stack traces. They loop, they retry, they burn tokens on tangents — and then return a perfectly plausible answer. The failure isn't a crash; it's *behavior*. So my warm-up plan was simple: build a deliberately imperfect agent, wire it to SigNoz, and see how fast I could catch it misbehaving.
+I could have pointed it at a hello-world web app. Everyone does. Nobody remembers the hello-world blog. But the main event is themed **agent observability**, and agents have a nasty property that makes them the perfect stress test for an observability tool: **they fail quietly**. No 500s, no stack traces. They loop, they retry, they burn tokens on tangents — and then return a perfectly plausible answer. The failure isn't a crash; it's *behavior*. So my warm-up plan was simple: build a deliberately imperfect agent, wire it to SigNoz, and see how fast I could catch it misbehaving.
 
-Spoiler: faster than I expected.
+Spoiler: faster than I expected. (Narrator: it was not, at first, faster than expected. The narrator was being generous, the same way your agent's logs are about to be generous with the truth.)
 
 ## Self-hosting SigNoz (~15 minutes, one gotcha)
 
 SigNoz's current install path is **Foundry**, its new installer CLI. The old flow is gone, and the docs are blunt about it: the legacy `install.sh` script and the bundled `deploy/` Compose files are ["deprecated as of SigNoz v0.130.0 and are no longer maintained or distributed"](https://signoz.io/docs/install/docker/). If you find a 2025 tutorial telling you to `git clone && docker compose up`, close the tab.
 
-**Prerequisites:** Docker, and a shell that can run the install script. That's genuinely it — no cloud account, no signup, no ingestion key. Then three steps:
+**Prerequisites:** Docker, and a shell that can run the install script. That's genuinely it — no cloud account, no signup, no ingestion key, no sales call asking if I have "fifteen minutes to talk about my observability journey." Then three steps:
 
 ```bash
 # 1. Install the foundryctl CLI
@@ -44,11 +44,11 @@ foundryctl cast -f casting.yaml
 
 A couple of minutes later, `docker ps` showed the whole stack healthy — the SigNoz server, an OTel collector (the "ingester"), **ClickHouse** for storage, ClickHouse Keeper, and a Postgres metastore. UI on `http://localhost:8080`, OTLP ingestion on `4317` (gRPC) and `4318` (HTTP). Every byte of telemetry stays on my machine. (I'm on Windows 11 — Docker Desktop with the WSL2 backend, and the install script runs fine from Git Bash.)
 
-**The gotcha worth knowing:** my first OTLP exports were rejected with connection resets, and the ingester logs showed the collector stuck in an OpAMP error/restart loop. The cause was hilariously mundane — I hadn't created the admin account yet. SigNoz's collector gets its config via OpAMP from the server, and until the first user/org exists it has nothing to serve. The moment I signed up at `localhost:8080`, the collector settled and ingestion turned green. If your self-hosted collector seems broken on first boot: **create your account first.**
+**The gotcha worth knowing:** my first OTLP exports were rejected with connection resets, and the ingester logs showed the collector stuck in an OpAMP error/restart loop. The cause was hilariously mundane — I hadn't created the admin account yet. SigNoz's collector gets its config via OpAMP from the server, and until the first user/org exists it has nothing to serve. The moment I signed up at `localhost:8080`, the collector settled and ingestion turned green. If your self-hosted collector seems broken on first boot: **create your account first.** (It is, once again, always the auth. It has never once not been the auth.)
 
 ![SigNoz Services page showing warmup-agent with P99 latency of 21,818 ms](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/1-services.png)
 
-The Services page a few minutes later: one application, `warmup-agent`, P99 latency **21,818 ms** — derived automatically from its spans, no metrics code written. For "2 + 2". We'll get to that.
+The Services page a few minutes later: one application, `warmup-agent`, P99 latency **21,818 ms** — derived automatically from its spans, no metrics code written. For "2 + 2". Most pocket calculators clear that in under a second, batteries included. We'll get to that.
 
 ## The agent, and how it's instrumented
 
@@ -89,9 +89,13 @@ run 2: Arithmetic: 2 + 2 = 4 (source: math)  (20.6s)
 run 3: arithmetic: 2 + 2 = 4 (source: math)  (20.9s)
 ```
 
-Correct answer. Absurd latency. My first guess was the lazy one: free-tier Gemini being free-tier Gemini. I'd already fought its rate limits earlier that day (the retry delay in my run loop exists for a reason), so a slow API felt plausible enough that I almost didn't investigate.
+Correct answer. Absurd latency.
 
-Two things stopped me. Twenty seconds is slow even for a free tier having a bad day. And scrolling my terminal logs, nothing looked *wrong* — no errors, no exceptions, a clean INFO trail. This is the agent failure mode in miniature: everything "works," and something is deeply off.
+![Expectation vs reality: 2+2=4 in under a second vs. 20.9 seconds with three silent retries](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/7-meme-expectation-reality.png)
+
+My first guess was the lazy one: free-tier Gemini being free-tier Gemini. I'd already fought its rate limits earlier that day (the retry delay in my run loop exists for a reason), so a slow API felt plausible enough that I almost didn't investigate. Step one of the Five Stages of Ignoring a Bug is always "blame the free tier." It is never the free tier's fault quite as often as we'd like it to be.
+
+Two things stopped me. Twenty seconds is slow even for a free tier having a bad day. And scrolling my terminal logs, nothing looked *wrong* — no errors, no exceptions, a clean INFO trail, the software equivalent of a suspect saying "no further questions, officer" with total confidence. This is the agent failure mode in miniature: everything "works," and something is deeply off.
 
 Time to look at what SigNoz saw.
 
@@ -102,6 +106,10 @@ I opened the **Traces Explorer**, and rather than scrolling, made the query buil
 ![Trace flamegraph: agent answer 20.89s with tool search_tool consuming 18.31s](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/2-trace-flamegraph.png)
 
 One glance killed my Gemini theory: the root `agent answer` span is 20.89 s, and sitting under it is a monstrous `tool search_tool` bar — **18.31 s, 87.62% of total execution time**. The two `chat gemini-3.1-flash-lite` spans flanking it are slivers (1.57 s for planning, a blink for the answer). The LLM I'd been ready to blame was never the problem; my *tool* was. The span's attributes (that's the GenAI conventions paying off) confirmed it: `gen_ai.tool.name: "search_tool"`, and — suspicious — `tool.attempts: 3`.
+
+It's called a **flame**graph. I did not expect that name to be quite this on the nose — 87.62% of my request was, functionally, on fire, and my terminal logs were standing next to it holding a cup of coffee insisting everything was fine:
+
+![My agent's logs during the entire 18.3-second incident, insisting everything is fine](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/6-meme-fire-logs.png)
 
 A trace tells you **where** the time went. It doesn't tell you **why**. Historically, "why" is where debugging gets miserable: copy the timestamp, switch to your logging tool, paste an approximate time window, squint at clock skew, guess which lines belong to this exact request.
 
@@ -123,7 +131,7 @@ INFO    search_tool: succeeded on attempt 3
 
 The same story in the Logs Explorer, filtered to `trace_id = '359c33c37996f84f6cf2fc02ffd5ab03'`: the full narrative of one agent run, from "received question" through the auto-captured `httpx` lines of the actual Gemini API calls, to the retry loop, to the answer — each LLM step even reporting its token usage (`llm plan completed (14 in / 196 out tokens)`).
 
-And there was my bug, in three lines: my search tool had a **silent retry loop** — a 3 s timeout and an aggressive exponential backoff against a flaky upstream. It always recovered by attempt three, so no error ever surfaced. The agent "worked." The user just waited 21 seconds. Only the *combination* — trace for where, logs for why, welded by a shared ID — told the whole story, in roughly two clicks and zero timestamp archaeology.
+And there was my bug, in three lines: my search tool had a **silent retry loop** — a 3 s timeout and an aggressive exponential backoff against a flaky upstream. It always recovered by attempt three, so no error ever surfaced. The agent "worked." The user just waited 21 seconds. Plot twist: the villain was never Gemini. The villain lived in `search_tool.py`, three retries deep, wearing an INFO-level trenchcoat. Only the *combination* — trace for where, logs for why, welded by a shared ID — told the whole story, in roughly two clicks and zero timestamp archaeology.
 
 The fix was three constants (cap the retries, shrink the backoff, fall back to cache fast). Next runs:
 
@@ -150,7 +158,7 @@ This isn't UI sugar — it falls out of an architectural decision, and it's wort
 | Clock skew between signals | Your problem | Same store, same clock |
 | Time to "why" | Minutes, if you're good | Seconds |
 
-I've done the copy-the-timestamp dance for years. I didn't register how much of it was pure tax until SigNoz deleted it.
+I've done the copy-the-timestamp dance for years. I didn't register how much of it was pure tax until SigNoz deleted it — turns out I'd been paying rent to three different landlords (Tempo, Loki, Prometheus) who don't talk to each other and definitely don't split a security deposit.
 
 And the rest of the product hangs off the same spine, which is what makes the exploration feel coherent rather than like five bolted-together tools: the **Services** page derived RED metrics (P99, error rate, ops/sec) for my agent purely from its spans; the **Logs Explorer** runs fast structured queries over the same store (severity and trace filters, plus one-click **Create an Alert** / **Add to Dashboard** straight from any query); and because dashboards and alerts are built on the identical query builder, the p95-latency alert for this agent is the exact query I already wrote, reused.
 
@@ -158,7 +166,7 @@ To prove that to myself, I finished by building an **Agent Health** dashboard �
 
 ![Agent Health dashboard: runs, p95 latency, LLM output tokens, and retry warnings](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/5-agent-health-dashboard.png)
 
-Read the top-right and bottom-right panels together and the whole incident is visible at a glance: p95 latency pinned above 20 s exactly while the retry-warning counts spike, then both collapse after the fix. That's the correlation thesis of this post, drawn as two lines.
+Read the top-right and bottom-right panels together and the whole incident is visible at a glance: p95 latency pinned above 20 s exactly while the retry-warning counts spike, then both collapse after the fix. That's the correlation thesis of this post, drawn as two lines — and it's four panels, zero SQL, and a distinct lack of me googling "how do I join traces and logs by timestamp" at 1 a.m., possibly ever again.
 
 ## One more thing: I let an AI agent read my telemetry
 
@@ -174,7 +182,7 @@ docker run -d -p 8000:8000 \
   signoz/signoz-mcp-server:latest
 ```
 
-**The gotcha that cost me half an hour:** I created the service account through the API (`POST /api/v1/service_accounts`) and passed a `role` field. The call returned `201 Created` and the role was silently dropped on the floor — so every single MCP call came back `403` with *"only viewers/editors/admins"*, which reads like a key problem when it's actually a role problem. The fix isn't in the request body: open the account in **Settings → Service Accounts → Roles**, add **`signoz-viewer`**, save. Then it works. If you're 403ing with a key you're certain is correct, go look at the role in the UI.
+**The gotcha that cost me half an hour:** I created the service account through the API (`POST /api/v1/service_accounts`) and passed a `role` field. The call returned `201 Created` and the role was silently dropped on the floor — so every single MCP call came back `403` with *"only viewers/editors/admins"*, which reads like a key problem when it's actually a role problem. I spent a genuinely embarrassing amount of that half hour convinced my API key was cursed. It was not cursed. It was roleless, which, philosophically, might be worse. The fix isn't in the request body: open the account in **Settings → Service Accounts → Roles**, add **`signoz-viewer`**, save. Then it works. If you're 403ing with a key you're certain is correct, go look at the role in the UI.
 
 How many tools does it expose? The docs currently say 33. The `tools/list` call against the `signoz/signoz-mcp-server:latest` image I pulled returned **41**: `signoz_list_services`, `signoz_search_traces`, `signoz_search_logs`, `signoz_query_metrics`, even `signoz_create_alert` and `signoz_create_dashboard`. This thing ships fast enough that any count in a blog post, this one included, is a snapshot. Ask your own instance rather than trusting my number.
 
@@ -184,7 +192,7 @@ I connected it to Claude Code and watched it re-run my entire investigation with
 2. **"Show me the slowest agent runs"** → `signoz_search_traces` with `duration_nano > 15s`: trace `359c33c3…`, 20.89 s — the exact trace from the flamegraph above, returned with a clickable `webUrl`.
 3. **"Any warnings?"** → `signoz_search_logs` with `severity_text = 'WARN'`: the retry-loop warnings — and because OTel logging captures code attributes, each log came back with `code.function.name: "search_tool"` and `code.line.number: 122`.
 
-Read that last one again: the assistant didn't just find the warning — the telemetry told it **which function and which line of my source code produced it**. An AI agent read my observability data and pointed at line 122 of `agent.py`. That's the "agent-native observability" pitch, working end-to-end on my laptop, against a self-hosted instance, with a read-only key.
+Read that last one again: the assistant didn't just find the warning — the telemetry told it **which function and which line of my source code produced it**. An AI agent read my observability data and pointed at line 122 of `agent.py`. My own code, ratted out by my own telemetry, to my own AI assistant. There's a lesson in there about accountability that I've chosen not to examine too closely. That's the "agent-native observability" pitch, working end-to-end on my laptop, against a self-hosted instance, with a read-only key.
 
 ## Why this matters double for agents
 
@@ -193,6 +201,12 @@ Here's the thesis I'm carrying into the hackathon: **for AI agents, signal corre
 An agent run *is* a trace: plan step, tool calls, reflection, answer — a tree of spans. The GenAI attributes annotate each step with model, tokens, and soon cost. The correlated logs record what each tool actually did. Put together, a single trace turns a non-deterministic black box into a *readable story of one decision*. My 18.3-second retry loop is the tame version; the same two-click move catches the expensive stuff — the agent that calls the same tool four times, the prompt that ballooned to 30k tokens, the tool that quietly falls back to stale cache.
 
 Traditional services fail loudly. Agents fail politely. You need the trace to notice, and the logs to understand.
+
+Three things I now believe in the way you believe things after they've personally embarrassed you:
+
+1. "No errors in the logs" is not the same claim as "nothing is wrong." It is the claim "nothing threw an exception," which is a much smaller and much less comforting claim.
+2. If your span is named after fire, maybe check that one first.
+3. Retries are like glitter: a little bit hides a lot of problems, and you will regret using them within the hour.
 
 ## Reproduce this yourself
 

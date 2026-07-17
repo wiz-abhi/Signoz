@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1200px; height:628px; background:#0a0a0a; overflow:hidden; }
+  body {
+    font-family: -apple-system, "Segoe UI", Inter, sans-serif;
+    position:relative;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    background:
+      radial-gradient(ellipse 900px 500px at 50% 110%, rgba(255,100,20,0.35), transparent 60%),
+      #0a0a0a;
+  }
+  .badge {
+    position:absolute; top:28px; left:32px;
+    background:#3a1212; color:#ff8a65; border:1px solid #7a2e18;
+    padding:6px 14px; border-radius:20px; font-size:14px; font-weight:600;
+    letter-spacing:0.5px;
+  }
+  .flames {
+    position:absolute; bottom:0; left:0; right:0; height:180px;
+    display:flex; justify-content:space-around; align-items:flex-end;
+    font-size:64px; filter: drop-shadow(0 0 30px rgba(255,120,20,0.55));
+    opacity:0.85;
+  }
+  .scene {
+    display:flex; align-items:center; gap:56px; z-index:2;
+  }
+  .bot {
+    font-size:96px;
+    filter: drop-shadow(0 8px 20px rgba(0,0,0,0.6));
+  }
+  .bubble {
+    background:#161616; border:1px solid #2a2a2a; border-radius:14px;
+    padding:14px 18px; max-width:220px; font-size:20px; color:#d4d4d4;
+    position:relative; box-shadow:0 4px 24px rgba(0,0,0,0.5);
+  }
+  .bubble:after {
+    content:""; position:absolute; left:-10px; top:38px;
+    border-width:8px 10px 8px 0; border-style:solid;
+    border-color:transparent #161616 transparent transparent;
+  }
+  .term {
+    background:#111214; border:1px solid #262a2e; border-radius:10px;
+    width:560px; padding:18px 22px; font-family:"SF Mono","Consolas",monospace;
+    font-size:16.5px; line-height:1.85; box-shadow:0 10px 40px rgba(0,0,0,0.55);
+  }
+  .term .dots span { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; }
+  .term .dots { margin-bottom:12px; }
+  .d1{background:#ff5f56;} .d2{background:#ffbd2e;} .d3{background:#27c93f;}
+  .ok { color:#4ade80; }
+  .info { color:#7dd3fc; }
+  .line-muted { color:#666; }
+  .caption {
+    position:absolute; bottom:26px; left:0; right:0; text-align:center; z-index:3;
+    color:#f5f5f5; font-size:22px; font-weight:700; letter-spacing:0.3px;
+  }
+  .sub {
+    position:absolute; bottom:2px; left:0; right:0; text-align:center; z-index:3;
+    color:#8a8a8a; font-size:14px;
+  }
+</style>
+</head>
+<body>
+  <div class="badge">🔥 INCIDENT REPORT</div>
+
+  <div class="flames">
+    <span>🔥</span><span>🔥</span><span>🔥</span><span>🔥</span><span>🔥</span>
+  </div>
+
+  <div class="scene" style="margin-bottom:70px;">
+    <div class="term">
+      <div class="dots"><span class="d1"></span><span class="d2"></span><span class="d3"></span></div>
+      <div><span class="line-muted">$</span> tail -f agent.log</div>
+      <div><span class="info">INFO</span>&nbsp; agent received question: what is 2 + 2?</div>
+      <div><span class="info">INFO</span>&nbsp; llm plan completed</div>
+      <div><span class="info">INFO</span>&nbsp; search_tool: succeeded on attempt 3</div>
+      <div><span class="info">INFO</span>&nbsp; agent answered: 2 + 2 = 4</div>
+      <div class="ok">✅ all systems nominal</div>
+    </div>
+    <div>
+      <div class="bot">🤖</div>
+      <div class="bubble" style="margin-top:8px;">totally fine. 10/10. no notes.</div>
+    </div>
+  </div>
+
+  <div class="caption">MY AGENT'S LOGS, DURING THE ENTIRE 18.3-SECOND INCIDENT</div>
+  <div class="sub">severity: WARN &nbsp;·&nbsp; vibes: also WARN, but nobody checked</div>
+</body>
+</html>
