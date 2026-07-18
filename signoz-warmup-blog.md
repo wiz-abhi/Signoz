@@ -46,7 +46,7 @@ A couple of minutes later, `docker ps` showed the whole stack healthy — the Si
 
 **The gotcha worth knowing:** my first OTLP exports were rejected with connection resets, and the ingester logs showed the collector stuck in an OpAMP error/restart loop. The cause was hilariously mundane — I hadn't created the admin account yet. SigNoz's collector gets its config via OpAMP from the server, and until the first user/org exists it has nothing to serve. The moment I signed up at `localhost:8080`, the collector settled and ingestion turned green. If your self-hosted collector seems broken on first boot: **create your account first.** (It is, once again, always the auth. It has never once not been the auth.)
 
-![SigNoz Services page showing warmup-agent with P99 latency of 21,818 ms](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/1-services.png)
+![SigNoz Services page showing warmup-agent with P99 latency of 21,818 ms](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/1-services.png?v=2)
 
 The Services page a few minutes later: one application, `warmup-agent`, P99 latency **21,818 ms** — derived automatically from its spans, no metrics code written. For "2 + 2". Most pocket calculators clear that in under a second, batteries included. We'll get to that.
 
@@ -91,7 +91,7 @@ run 3: arithmetic: 2 + 2 = 4 (source: math)  (20.9s)
 
 Correct answer. Absurd latency.
 
-![Expectation vs reality: 2+2=4 in under a second vs. 20.9 seconds with three silent retries](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/7-meme-expectation-reality.png)
+![Expectation vs reality: 2+2=4 in under a second vs. 20.9 seconds with three silent retries](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/7-meme-expectation-reality.png?v=2)
 
 My first guess was the lazy one: free-tier Gemini being free-tier Gemini. I'd already fought its rate limits earlier that day (the retry delay in my run loop exists for a reason), so a slow API felt plausible enough that I almost didn't investigate. Step one of the Five Stages of Ignoring a Bug is always "blame the free tier." It is never the free tier's fault quite as often as we'd like it to be.
 
@@ -103,13 +103,13 @@ Time to look at what SigNoz saw.
 
 I opened the **Traces Explorer**, and rather than scrolling, made the query builder do the work — one filter, `durationNano >= 15s`, and only the pathological runs remained. Clicked one.
 
-![Trace flamegraph: agent answer 20.89s with tool search_tool consuming 18.31s](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/2-trace-flamegraph.png)
+![Trace flamegraph: agent answer 20.89s with tool search_tool consuming 18.31s](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/2-trace-flamegraph.png?v=2)
 
 One glance killed my Gemini theory: the root `agent answer` span is 20.89 s, and sitting under it is a monstrous `tool search_tool` bar — **18.31 s, 87.62% of total execution time**. The two `chat gemini-3.1-flash-lite` spans flanking it are slivers (1.57 s for planning, a blink for the answer). The LLM I'd been ready to blame was never the problem; my *tool* was. The span's attributes (that's the GenAI conventions paying off) confirmed it: `gen_ai.tool.name: "search_tool"`, and — suspicious — `tool.attempts: 3`.
 
 It's called a **flame**graph. I did not expect that name to be quite this on the nose — 87.62% of my request was, functionally, on fire, and my terminal logs were standing next to it holding a cup of coffee insisting everything was fine:
 
-![My agent's logs during the entire 18.3-second incident, insisting everything is fine](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/6-meme-fire-logs.png)
+![My agent's logs during the entire 18.3-second incident, insisting everything is fine](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/6-meme-fire-logs.png?v=2)
 
 A trace tells you **where** the time went. It doesn't tell you **why**. Historically, "why" is where debugging gets miserable: copy the timestamp, switch to your logging tool, paste an approximate time window, squint at clock skew, guess which lines belong to this exact request.
 
@@ -117,7 +117,7 @@ A trace tells you **where** the time went. It doesn't tell you **why**. Historic
 
 In SigNoz, the span details panel has a **Logs** tab. I clicked it with the slow span selected.
 
-![The slow span selected with its correlated retry warning logs shown in the Logs tab](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/3-span-related-logs.png)
+![The slow span selected with its correlated retry warning logs shown in the Logs tab](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/3-span-related-logs.png?v=2)
 
 The money shot. There they were. Not "logs from around that time" — *the logs of that exact span*, joined by the `trace_id` the instrumentation had been stamping all along, with the two WARN lines glowing amber in the panel:
 
@@ -127,7 +127,7 @@ WARNING search_tool: upstream timeout, retrying (2/3)
 INFO    search_tool: succeeded on attempt 3
 ```
 
-![Logs Explorer filtered by trace_id showing the full narrative of one agent run](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/4-logs-explorer-trace-filter.png)
+![Logs Explorer filtered by trace_id showing the full narrative of one agent run](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/4-logs-explorer-trace-filter.png?v=2)
 
 The same story in the Logs Explorer, filtered to `trace_id = '359c33c37996f84f6cf2fc02ffd5ab03'`: the full narrative of one agent run, from "received question" through the auto-captured `httpx` lines of the actual Gemini API calls, to the retry loop, to the answer — each LLM step even reporting its token usage (`llm plan completed (14 in / 196 out tokens)`).
 
@@ -164,7 +164,7 @@ And the rest of the product hangs off the same spine, which is what makes the ex
 
 To prove that to myself, I finished by building an **Agent Health** dashboard — four panels, each just a query-builder expression: agent runs over time (`count()` on the root span), p95 agent latency (`p95(duration_nano)`), LLM output tokens (`sum(gen_ai.usage.output_tokens)` — the GenAI conventions again), and tool retry warnings (`count()` on WARN logs). Four different questions, three different signals, one query language.
 
-![Agent Health dashboard: runs, p95 latency, LLM output tokens, and retry warnings](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/5-agent-health-dashboard.png)
+![Agent Health dashboard: runs, p95 latency, LLM output tokens, and retry warnings](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-agent/screenshots/5-agent-health-dashboard.png?v=2)
 
 Read the top-right and bottom-right panels together and the whole incident is visible at a glance: p95 latency pinned above 20 s exactly while the retry-warning counts spike, then both collapse after the fix. That's the correlation thesis of this post, drawn as two lines — and it's four panels, zero SQL, and a distinct lack of me googling "how do I join traces and logs by timestamp" at 1 a.m., possibly ever again.
 
