@@ -4,3 +4,4 @@ token_dump.json
 *.pyc
 warmup-blog-2/scratch/
 warmup-agent/devto_preview/
+warmup-blog-2/*.medium.html
