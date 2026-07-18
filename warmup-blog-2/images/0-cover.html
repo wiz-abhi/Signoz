@@ -21,11 +21,11 @@
     flex: 1;
     display: flex;
     align-items: center;
-    padding: 0 78px;
+    padding: 0 90px;
   }
 
   /* ---------- left: funnel ---------- */
-  .funnel { width: 556px; flex: 0 0 556px; }
+  .funnel { width: 502px; flex: 0 0 502px; }
 
   .eyebrow {
     font-size: 11px;
@@ -44,6 +44,7 @@
   }
   .row:last-child { margin-bottom: 0; }
 
+  .track { width: 440px; flex: 0 0 440px; }
   .bar {
     height: 52px;
     border: 1.5px solid #d1d5db;
@@ -59,37 +60,36 @@
     overflow: visible;
   }
   .count {
-    margin-left: 16px;
+    margin-left: 20px;
+    width: 42px;
+    text-align: right;
     font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
     font-size: 20px;
     font-weight: 600;
     color: #9ca3af;
   }
 
-  /* collapsed step */
+  /* collapsed step: dashed ghost outline = the width it should have had */
   .row.dead .bar {
-    border-color: #e07b00;
-    border-width: 2px;
-    background: #fff8ef;
-    padding: 0;
-    width: 10px;
-    flex: 0 0 10px;
+    border: 2px dashed #e5b783;
+    background: transparent;
+    color: #b06a12;
+    position: relative;
   }
-  .row.dead .ghost {
-    margin-left: 14px;
-    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
-    font-size: 17px;
-    color: #7a4200;
-    white-space: nowrap;
+  /* the actual (zero-width) amber bar, pinned at the start of the ghost */
+  .row.dead .bar::before {
+    content: "";
+    position: absolute;
+    left: -2px; top: -2px;
+    width: 7px; height: 52px;
+    background: #e07b00;
+    border-radius: 4px 0 0 4px;
   }
   .row.dead .count {
     color: #e07b00;
-    font-size: 24px;
+    font-size: 26px;
     font-weight: 700;
   }
-
-  /* thin taper connectors between bars */
-  .taper { position: absolute; left: 0; top: 0; overflow: visible; }
 
   /* ---------- right: readout ---------- */
   .readout {
@@ -138,7 +138,7 @@
     border-top: 1.5px solid #e8e8ea;
     display: flex;
     align-items: center;
-    padding: 0 78px;
+    padding: 0 90px;
     font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
     font-size: 13.5px;
     color: #9ca3af;
@@ -154,19 +154,18 @@
         <div class="eyebrow">Trace funnel &mdash; step conversion</div>
 
         <div class="row">
-          <div class="bar" style="width: 452px;">agent answer</div>
+          <div class="track"><div class="bar" style="width: 440px;">agent answer</div></div>
           <div class="count">22</div>
         </div>
 
         <div class="row">
-          <div class="bar" style="width: 372px;">tool search_tool</div>
+          <div class="track"><div class="bar" style="width: 380px;">tool search_tool</div></div>
           <div class="count">22</div>
         </div>
 
         <div class="row dead">
-          <div class="bar"></div>
-          <div class="ghost">chat gpt-4o-mini</div>
-          <div class="count" style="margin-left: 18px;">0</div>
+          <div class="track"><div class="bar" style="width: 308px;">chat gpt-4o-mini</div></div>
+          <div class="count">0</div>
         </div>
       </div>
 
