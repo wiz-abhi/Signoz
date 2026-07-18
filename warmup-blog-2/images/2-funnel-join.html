@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a2e;
+  }
+  .canvas { width: 1400px; padding: 72px 80px 72px; }
+  .title { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; }
+  .subtitle { margin-top: 10px; font-size: 17px; color: #6b7280; }
+
+  .funnel { position: relative; width: 760px; margin: 56px 0 0; }
+  .nlabel {
+    position: absolute;
+    top: -34px; right: 0;
+    font-size: 14px;
+    color: #6b7280;
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+    background: #f3f4f6;
+    padding: 4px 10px;
+    border-radius: 6px;
+  }
+  .fstep {
+    margin: 0 auto 14px;
+    border: 1.5px solid #d1d5db;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 20px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .fstep .left { display: flex; align-items: baseline; gap: 18px; }
+  .fstep .num {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #9ca3af; white-space: nowrap;
+  }
+  .fstep .cond {
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+    font-size: 17px; color: #374151; white-space: nowrap;
+  }
+  .fstep .cond .k { color: #9ca3af; }
+  .fstep .match { font-size: 15.5px; color: #4b5563; white-space: nowrap; }
+  .fstep .ok { color: #15803d; font-weight: 700; margin-left: 10px; }
+  .fstep .partial { color: #b45309; font-weight: 700; margin-left: 10px; }
+
+  /* geometric narrowing */
+  .w1 { width: 760px; }
+  .w2 { width: 680px; }
+  .w3 { width: 600px; }
+
+  .fstep.broken {
+    border-color: #e07b00;
+    border-width: 2px;
+    background: #fff8ef;
+  }
+  .fstep.broken .cond { color: #7a4200; }
+  .fstep.broken .cond .k { color: #e0a860; }
+  .note {
+    width: 600px;
+    margin: 6px auto 0;
+    font-size: 14px;
+    color: #9ca3af;
+    text-align: right;
+    font-style: italic;
+  }
+
+  /* connector + terminal region */
+  .tail {
+    margin-top: 8px;
+    display: flex;
+    align-items: flex-start;
+  }
+  .tail .arrowcol { flex: 0 0 340px; position: relative; }
+  .tail .arrowcol svg { display: block; }
+  .tail .arrowcol .lbl {
+    position: absolute;
+    left: 120px; top: 78px;
+    width: 210px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #7a4200;
+    line-height: 1.4;
+  }
+
+  .term-wrap { flex: 1; padding-top: 40px; }
+  .term-wrap .sub {
+    font-size: 15px;
+    color: #6b7280;
+    margin-bottom: 16px;
+    line-height: 1.5;
+    max-width: 520px;
+  }
+  .terminal {
+    width: 520px;
+    background: #1a1a2e;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+  }
+  .terminal .bar {
+    background: #26263f;
+    padding: 9px 14px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .terminal .dot { width: 11px; height: 11px; border-radius: 50%; background: #4b4b6a; }
+  .terminal .body { padding: 18px 20px 20px; font-size: 15px; line-height: 1.65; }
+  .terminal .http { color: #ff7a5c; font-weight: 700; }
+  .terminal .msg { color: #e5e7eb; }
+  .terminal .nan { color: #ffb454; font-weight: 700; }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <div class="title">How a funnel step matches spans</div>
+    <div class="subtitle">Each step is a span-name filter. A partial match just lowers conversion &mdash; but a step that names a model no longer emitting spans matches zero, and then SigNoz crashes instead of reporting 0%.</div>
+
+    <div class="funnel">
+      <div class="nlabel">n = 22 traces</div>
+
+      <div class="fstep w1">
+        <div class="left">
+          <span class="num">Step 1</span>
+          <span class="cond"><span class="k">name =</span> 'agent answer'</span>
+        </div>
+        <div class="match">matches 22 traces <span class="ok">&#10003;</span></div>
+      </div>
+
+      <div class="fstep w2">
+        <div class="left">
+          <span class="num">Step 2</span>
+          <span class="cond"><span class="k">name =</span> 'tool search_tool'</span>
+        </div>
+        <div class="match">matches 22 traces <span class="ok">&#10003;</span></div>
+      </div>
+
+      <div class="fstep broken w3">
+        <div class="left">
+          <span class="num">Step 3</span>
+          <span class="cond"><span class="k">name =</span> 'chat gpt-4o-mini'</span>
+        </div>
+        <div class="match">matches 10 of 22 <span class="partial">&#9888;</span></div>
+      </div>
+      <div class="note">12 traces switched to another model mid-experiment</div>
+    </div>
+
+    <div class="tail">
+      <div class="arrowcol">
+        <svg width="200" height="130" viewBox="0 0 200 130">
+          <path d="M60 0 C 60 60, 60 84, 108 96" stroke="#e07b00" stroke-width="1.5" fill="none"/>
+          <path d="M108 96 l -12 -3 l 3 11 z" fill="#e07b00"/>
+        </svg>
+        <div class="lbl">step with zero matches &ne; 0% &mdash; the API crashes</div>
+      </div>
+
+      <div class="term-wrap">
+        <div class="sub">Point a step at a model that stopped emitting spans (a fallback or version bump), it matches 0 spans, and the funnel API divides by that count without a guard:</div>
+        <div class="terminal">
+          <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="body">
+            <div><span class="http">HTTP 500</span></div>
+            <div class="msg" style="margin-top:8px;">v3.Row.Data: unsupported value: <span class="nan">NaN</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a2e;
+  }
+  .canvas {
+    width: 1400px;
+    padding: 72px 80px 64px;
+  }
+  .title {
+    font-size: 30px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: #1a1a2e;
+  }
+  .subtitle {
+    margin-top: 10px;
+    font-size: 17px;
+    color: #6b7280;
+    font-weight: 400;
+  }
+
+  /* Reasoning loop row */
+  .loop {
+    margin-top: 56px;
+    display: flex;
+    align-items: center;
+  }
+  .step {
+    border: 1.5px solid #d1d5db;
+    border-radius: 10px;
+    padding: 20px 26px;
+    min-width: 160px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: 500;
+    color: #374151;
+    background: #ffffff;
+  }
+  .step .idx {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #9ca3af;
+    margin-bottom: 8px;
+  }
+  .step.hl {
+    border-color: #e07b00;
+    border-width: 2px;
+    background: #fff8ef;
+    color: #7a4200;
+  }
+  .step.hl .idx { color: #e07b00; }
+  .arrow {
+    flex: 0 0 46px;
+    height: 1.5px;
+    background: #cbd5e1;
+    position: relative;
+  }
+  .arrow::after {
+    content: "";
+    position: absolute;
+    right: 0; top: 50%;
+    width: 8px; height: 8px;
+    border-top: 1.5px solid #cbd5e1;
+    border-right: 1.5px solid #cbd5e1;
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  /* Connector from highlighted step down to the explode zone */
+  .explode {
+    margin-top: 8px;
+    display: flex;
+  }
+  .explode-spacer { flex: 0 0 542px; }  /* aligns under the 3rd (LLM answer) box */
+  .fanwrap { flex: 1; }
+  .fanlines { height: 64px; position: relative; }
+  .fanlines svg { display: block; }
+
+  .chips {
+    display: flex;
+    gap: 22px;
+  }
+  .chip {
+    border: 1.5px solid #e5b783;
+    background: #fffaf3;
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: "SF Mono", "Cascadia Code", "Consolas", "Liberation Mono", monospace;
+    font-size: 17px;
+    color: #7a4200;
+    white-space: nowrap;
+  }
+  .caption {
+    margin-top: 30px;
+    margin-left: 542px;
+    font-size: 15.5px;
+    color: #6b7280;
+  }
+  .caption .sep { color: #cbd5e1; margin: 0 10px; }
+  .caption code {
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+    font-size: 14.5px;
+    color: #374151;
+    background: #f3f4f6;
+    padding: 2px 7px;
+    border-radius: 5px;
+  }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <div class="title">One logical step, three span names</div>
+    <div class="subtitle">The agent runs the same reasoning loop every trace &mdash; but one step never shows up under a stable name.</div>
+
+    <div class="loop">
+      <div class="step"><span class="idx">Step 1</span>plan</div>
+      <div class="arrow"></div>
+      <div class="step"><span class="idx">Step 2</span>tool call</div>
+      <div class="arrow"></div>
+      <div class="step hl"><span class="idx">Step 3</span>LLM answer</div>
+      <div class="arrow"></div>
+      <div class="step"><span class="idx">Step 4</span>respond</div>
+    </div>
+
+    <div class="explode">
+      <div class="explode-spacer"></div>
+      <div class="fanwrap">
+        <div class="fanlines">
+          <svg width="820" height="64" viewBox="0 0 820 64">
+            <!-- origin ~ x=88 (center of LLM answer box relative to fanwrap), fan to 3 chip centers -->
+            <path d="M88 0 C 88 34, 88 34, 88 64"   stroke="#e07b00" stroke-width="1.5" fill="none"/>
+            <path d="M88 0 C 88 40, 300 24, 300 64"  stroke="#e5b783" stroke-width="1.5" fill="none"/>
+            <path d="M88 0 C 88 40, 560 24, 560 64"  stroke="#e5b783" stroke-width="1.5" fill="none"/>
+          </svg>
+        </div>
+        <div class="chips">
+          <div class="chip">chat gpt-4o-mini</div>
+          <div class="chip">chat gemini-3.1-flash-lite</div>
+          <div class="chip">chat gpt-oss-120b</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="caption">
+      same logical step
+      <span class="sep">&middot;</span>
+      three literal span names
+      <span class="sep">&middot;</span>
+      OTel GenAI spec: <code>{operation} {model}</code>
+    </div>
+  </div>
+</body>
+</html>
