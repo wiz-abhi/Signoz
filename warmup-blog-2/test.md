@@ -36,8 +36,7 @@ That's 44 chat spans across 22 traces, split three ways by model. The `agent ans
 
 <br>
 
-![Agent reasoning loop: one logical LLM step fragments into three span names.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/1-span-fragmentation.png)
-> **📸 Figure 1 — Span fragmentation.** *Agent reasoning loop: one logical LLM step fragments into three span names.*
+![Figure 1 — Span fragmentation. Agent reasoning loop: one logical LLM step fragments into three span names.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/1-span-fragmentation.png)
 
 <br>
 
@@ -57,8 +56,7 @@ My first funnel had three steps in the order I think of my agent: `agent answer`
 
 <br>
 
-![The agent-pipeline funnel configured in SigNoz: three steps on the warmup-agent service.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/3-funnel-ui.png)
-> **📸 Figure 2 — Funnel configuration.** *The agent-pipeline funnel configured in SigNoz: three steps on the warmup-agent service.*
+![Figure 2 — Funnel configuration. The agent-pipeline funnel configured in SigNoz: three steps on the warmup-agent service.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/3-funnel-ui.png)
 
 <br>
 
@@ -66,8 +64,7 @@ Steps one and two matched 22 out of 22. Step three matched zero.
 
 <br>
 
-![22 and 22 span bars, then 0 with a 100% drop, while the overview panel shows No data.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/4-funnel-results.png)
-> **📸 Figure 3 — Funnel results.** *22 and 22 span bars, then 0 with a 100% drop, while the overview panel shows No data.*
+![Figure 3 — Funnel results. 22 and 22 span bars, then 0 with a 100% drop, while the overview panel shows No data.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/4-funnel-results.png)
 
 <br>
 
@@ -77,8 +74,7 @@ The explanation took me longer than I'd like to admit: funnels enforce strict te
 
 <br>
 
-![One trace in time order: the funnel timestamps chat at the early plan call, so chat-after-tool matches nothing.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/6-trace-timeline.png)
-> **📸 Figure 4 — Trace timeline.** *One trace in time order: the funnel timestamps chat at the early plan call, so chat-after-tool matches nothing.*
+![Figure 4 — Trace timeline. One trace in time order: the funnel timestamps chat at the early plan call, so chat-after-tool matches nothing.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/6-trace-timeline.png)
 
 <br>
 
@@ -88,8 +84,7 @@ And that's before the span-name fragmentation even enters. Under any single name
 
 <br>
 
-![Funnel steps join on literal span names; a zero-match step crashes the API.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/2-funnel-join.png)
-> **📸 Figure 5 — The literal-name join.** *Funnel steps join on literal span names; a zero-match step crashes the API.*
+![Figure 5 — The literal-name join. Funnel steps join on literal span names; a zero-match step crashes the API.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/2-funnel-join.png)
 
 <br>
 
@@ -105,8 +100,7 @@ app.ApiResponse.Data: []*v3.Row: v3.Row.Data: unsupported value: NaN
 
 <br>
 
-![The verbatim request and 500 NaN response from the funnel overview endpoint.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/5-funnel-500.png)
-> **📸 Figure 6 — The 500 response.** *The verbatim request and 500 NaN response from the funnel overview endpoint.*
+![Figure 6 — The 500 response. The verbatim request and 500 NaN response from the funnel overview endpoint.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/5-funnel-500.png)
 
 <br>
 
@@ -146,8 +140,7 @@ If you hit a zero of your own, this is the whole diagnosis in one picture:
 
 <br>
 
-![Single-step funnel test separates ordering problems from name problems, and either way a zero-converting step 500s the overview API.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/7-zero-flowchart.png)
-> **📸 Figure 7 — Diagnosis flowchart.** *Single-step funnel test separates ordering problems from name problems, and either way a zero-converting step 500s the overview API.*
+![Figure 7 — Diagnosis flowchart. Single-step funnel test separates ordering problems from name problems, and either way a zero-converting step 500s the overview API.](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/7-zero-flowchart.png)
 
 <br>
 
