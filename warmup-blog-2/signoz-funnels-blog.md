@@ -1,6 +1,6 @@
 # I Built a Trace Funnel Over My AI Agent. The Conversion Rate Came Back NaN.
 
-I asked SigNoz a simple question: of the runs where my agent planned an answer and called its search tool, how many reached the LLM step? The funnel said zero, for a model that had demonstrably run in ten traces. Chasing that zero took me somewhere better: an analytics endpoint that answers HTTP 500 where "0%" should be. A conversion funnel that cannot say "zero" has a sharp edge somewhere, and I went looking for it.
+I asked SigNoz a simple question: of the runs where my agent planned an answer and called its search tool, how many reached the LLM step? The funnel said zero, for a model that had demonstrably run in ten traces. Chasing that zero led somewhere better than the answer I wanted: an analytics endpoint that returns HTTP 500 where "0%" belongs, and a one-line guard in the SQL that explains exactly why.
 
 This is a warm-up post for the Agents of SigNoz hackathon. I self-hosted SigNoz v0.132.2 with Foundry ([the docs walk through it](https://signoz.io/docs/install/docker/)), pointed a small AI agent at it, and spent a few days on a feature I hadn't seen anywhere else. My first warm-up post covered trace-to-log correlation; this one is a different corner of the product.
 
@@ -70,7 +70,22 @@ app.ApiResponse.Data: []*v3.Row: v3.Row.Data: unsupported value: NaN
 
 A step that matches nothing should be a zero-percent conversion. Zero is a perfectly good answer to "how many made it this far." Instead a zero-converting final step produces a `NaN` the response can't carry, the request dies with a 500, and the UI papers over it as "No data." I re-verified all of this today against my live instance; the exact curl commands, request bodies, and responses are in [the repo](https://github.com/wiz-abhi/Signoz/blob/main/warmup-blog-2/evidence/funnel-api-repro.md) if you want to reproduce it end to end (creating funnels needs an editor or admin token; a read-only key gets a 403).
 
-I've dug into where it happens and I'm filing an issue upstream with a repro, so I'll leave the internals for that. What matters for anyone using funnels today is that a zero-converting step is a live crash behind a quiet UI, and GenAI span naming plus ordering makes zero-converting steps very easy to create by accident.
+So I went reading the query builders that generate this SQL, and the shape of it is almost funny. The full-funnel query already guards its conversion division:
+
+```sql
+round(if(total_s1_spans > 0, total_sN_spans * 100.0 / total_s1_spans, 0), 2) AS conversion_rate
+```
+
+That guard is why a zero-converting funnel still reports a sane 0% for conversion. But sitting in the same SELECT are two aggregates with no such protection:
+
+```sql
+avgIf(..., <full funnel completed>)          AS avg_duration,
+quantileIf(0.99)(..., <full funnel completed>) AS latency
+```
+
+When no trace completes the funnel, those aggregate over an empty set, and the response carries a value JSON can't encode. The step-transition query has the same two unguarded aggregates, and its conversion division is missing the guard its sibling already has. The fix that already exists one function away is the fix the other one needs. I filed it as [SigNoz#12143](https://github.com/SigNoz/signoz/issues/12143) with this repro and offered a PR.
+
+What matters for anyone using funnels today: a zero-converting step is a live crash behind a quiet UI, and GenAI span naming plus ordering makes zero-converting steps very easy to create by accident.
 
 ## What actually works, and one thing that doesn't
 
@@ -84,13 +99,14 @@ Two operational habits, both learned the slow way. Before trusting any multi-ste
 
 Trace Funnels are, for my money, one of the most underrated primitives in SigNoz for agent work. Measuring drop-off across the steps of a trace maps onto agent pipelines so naturally that I'm surprised I couldn't find it in the dedicated LLM tools. The sharp edges are specific and avoidable once you can name them: steps match literal span names, GenAI naming guarantees your most important step won't have one, ordering follows the trace rather than your intentions, and a step that converts to zero crashes the overview API instead of reporting 0%. Funnel on a wrapper span with a name you control, and check your ordering with single-step funnels first.
 
-Rough corners are normal in a young feature. I want this one to win, so it's getting a proper bug report with a repro instead of a complaint.
+Rough corners are normal in a young feature, and the useful response is a repro rather than a complaint. Two days with this thing and I'm more convinced it belongs in an agent developer's toolkit, not less.
 
 ## Resources
 
+- The bug: [SigNoz#12143](https://github.com/SigNoz/signoz/issues/12143), with the repro from this post
+- Full request/response log and copy-pasteable curls: [funnel-api-repro.md](https://github.com/wiz-abhi/Signoz/blob/main/warmup-blog-2/evidence/funnel-api-repro.md)
 - OpenTelemetry GenAI span conventions: [gen-ai-spans.md](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md)
-- [SigNoz docs](https://signoz.io/docs/)
-- Install path: [SigNoz on Docker](https://signoz.io/docs/install/docker/)
+- [SigNoz docs](https://signoz.io/docs/) · install path: [SigNoz on Docker](https://signoz.io/docs/install/docker/)
 
 ---
 
