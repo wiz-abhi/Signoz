@@ -13,8 +13,19 @@ with sync_playwright() as p:
     pg.wait_for_selector('input[type="password"]')
     pg.fill('input[type="password"]', os.environ.get("SIGNOZ_PASSWORD", ""))
     pg.click('button:has-text("Sign in with Password")')
-    pg.wait_for_url("**/home**", timeout=30000)
+    try:
+        pg.wait_for_url("**/home**", timeout=15000)
+    except Exception:
+        pg.wait_for_timeout(3000)
+        print("did not reach /home; current url:", pg.url)
+        err = pg.locator(".ant-message, .ant-alert, [role='alert']").all_inner_texts()
+        if err:
+            print("on-screen message:", err)
+        pg.screenshot(path="login_debug.png", full_page=True)
+        print("screenshot saved: login_debug.png")
     ls = json.loads(pg.evaluate("() => JSON.stringify(Object.fromEntries(Object.entries(localStorage)))"))
+    if not ls.get("AUTH_TOKEN"):
+        print("NO AUTH_TOKEN in localStorage -> login failed (check password)")
     with open("token_dump.json", "w") as f:
         json.dump(ls, f, indent=1)
     for k, v in ls.items():
