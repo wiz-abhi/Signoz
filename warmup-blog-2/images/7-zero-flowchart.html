@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a2e;
+  }
+  .canvas { width: 1400px; padding: 72px 80px 64px; }
+  .title { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; color: #1a1a2e; }
+  .subtitle { margin-top: 10px; font-size: 17px; color: #6b7280; font-weight: 400; }
+
+  .flow { position: relative; margin-top: 52px; width: 1240px; }
+
+  .box {
+    position: absolute;
+    border: 1.5px solid #d1d5db;
+    border-radius: 10px;
+    background: #ffffff;
+    padding: 20px 24px;
+    color: #374151;
+    font-size: 16.5px;
+    line-height: 1.5;
+  }
+  .box .lead {
+    display: block;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #9ca3af;
+    margin-bottom: 8px;
+  }
+  .box code {
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+    font-size: 14.5px;
+    color: #7a4200;
+    background: #fffaf3;
+    border: 1px solid #f0dcc2;
+    padding: 1px 6px;
+    border-radius: 5px;
+  }
+
+  .box.start {
+    border-color: #9ca3af;
+    background: #fafafa;
+    font-weight: 600;
+    color: #1a1a2e;
+    text-align: center;
+    font-size: 17px;
+  }
+  .box.decision {
+    border-color: #e07b00;
+    border-width: 2px;
+    background: #fff8ef;
+  }
+  .box.decision .lead { color: #e07b00; }
+  .box.decision .q { color: #7a4200; font-weight: 600; }
+  .box.diag { color: #374151; }
+  .box.fix {
+    border-color: #cbd5e1;
+    background: #f6f7f9;
+  }
+  .box.fix .lead { color: #15803d; }
+
+  /* connectors */
+  svg.wires { position: absolute; left: 0; top: 0; overflow: visible; }
+  .wires path { fill: none; stroke: #cbd5e1; stroke-width: 1.5px; }
+  .wires .amber { stroke: #e07b00; }
+  .brlabel {
+    position: absolute;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.10em;
+    text-transform: uppercase; color: #9ca3af;
+    background: #ffffff; padding: 2px 8px;
+  }
+  .brlabel.yes { color: #15803d; }
+  .brlabel.no  { color: #b45309; }
+
+  /* footer note */
+  .footer {
+    margin-top: 40px;
+    width: 1240px;
+    background: #fff8ef;
+    border-left: 4px solid #e07b00;
+    border-radius: 0 8px 8px 0;
+    padding: 18px 24px;
+    font-size: 15.5px;
+    color: #7a4200;
+    line-height: 1.55;
+  }
+  .footer b { color: #7a4200; }
+  .footer code {
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+    font-size: 14px;
+    color: #7a4200;
+    background: #fffaf3;
+    border: 1px solid #f0dcc2;
+    padding: 1px 6px;
+    border-radius: 5px;
+  }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <div class="title">Your funnel step reads 0 (or the page says No data)</div>
+    <div class="subtitle">Two questions tell you which of the two failure modes you&rsquo;re in &mdash; and each has a durable fix.</div>
+
+    <!-- flow area; heights measured so wires connect cleanly -->
+    <div class="flow" style="height: 560px;">
+      <svg class="wires" width="1240" height="560" viewBox="0 0 1240 560">
+        <!-- start -> decision -->
+        <path d="M620 62 L620 96"/>
+        <path d="M620 96 l -5 -10 l 10 0 z" fill="#cbd5e1" stroke="none"/>
+
+        <!-- decision left edge -> YES column (x=310) -->
+        <path d="M360 168 L310 168 L310 236"/>
+        <path d="M310 236 l -5 -10 l 10 0 z" fill="#cbd5e1" stroke="none"/>
+        <!-- decision right edge -> NO column (x=930) -->
+        <path d="M880 168 L930 168 L930 236"/>
+        <path d="M930 236 l -5 -10 l 10 0 z" fill="#cbd5e1" stroke="none"/>
+
+        <!-- YES diag -> YES fix -->
+        <path class="amber" d="M310 372 L310 428"/>
+        <path d="M310 428 l -5 -10 l 10 0 z" fill="#e07b00" stroke="none"/>
+        <!-- NO diag -> NO fix -->
+        <path d="M930 372 L930 428"/>
+        <path d="M930 428 l -5 -10 l 10 0 z" fill="#cbd5e1" stroke="none"/>
+      </svg>
+
+      <!-- start -->
+      <div class="box start" style="left: 470px; top: 8px; width: 300px;">
+        Funnel step reads 0 / page shows &ldquo;No data&rdquo;
+      </div>
+
+      <!-- decision -->
+      <div class="box decision" style="left: 360px; top: 108px; width: 520px;">
+        <span class="lead">Check</span>
+        <span class="q">Build a single-step funnel with just that span name. Does it match any spans?</span>
+      </div>
+
+      <!-- branch labels -->
+      <div class="brlabel yes" style="left: 262px; top: 194px;">Yes</div>
+      <div class="brlabel no"  style="left: 892px; top: 194px;">No</div>
+
+      <!-- YES: ordering diagnosis -->
+      <div class="box diag" style="left: 90px; top: 248px; width: 440px;">
+        <span class="lead">Ordering problem</span>
+        The step&rsquo;s <b>first occurrence</b> fires earlier in the trace than your previous step &mdash; the min-timestamp rule drops the ordered match.
+      </div>
+      <!-- YES: fix -->
+      <div class="box fix" style="left: 90px; top: 440px; width: 440px;">
+        <span class="lead">Fix</span>
+        Reorder the steps to match real span start order, or funnel on a wrapper span that spans the whole loop.
+      </div>
+
+      <!-- NO: name diagnosis -->
+      <div class="box diag" style="left: 710px; top: 248px; width: 440px;">
+        <span class="lead">Name problem</span>
+        The literal span name no longer matches &mdash; a model swap, a retired name, or GenAI <code>{operation} {model}</code> naming changed the string.
+      </div>
+      <!-- NO: fix -->
+      <div class="box fix" style="left: 710px; top: 440px; width: 440px;">
+        <span class="lead">Fix</span>
+        Wrap LLM calls in a stable parent span (e.g. <code>llm step</code>) and funnel on that instead of the model name.
+      </div>
+    </div>
+
+    <div class="footer">
+      <b>Either way:</b> any step that converts to zero makes the overview endpoints return <b>HTTP 500 (NaN)</b> instead of 0% &mdash; SigNoz&#8202;#12143.
+    </div>
+  </div>
+</body>
+</html>

@@ -52,11 +52,15 @@ Steps one and two matched 22 out of 22. Step three matched zero.
 
 Zero. For a model that demonstrably ran in ten traces. At first I assumed I'd broken my own instrumentation. That's the honest reflex: when a tool shows zeros on your data, you suspect your data. I went back to my exporter config, re-checked the span names against ClickHouse, even built a one-step funnel containing only `chat gpt-4o-mini`. That one matched 10 traces. So the spans exist, the names are right, and the funnel still says zero when the step sits third.
 
-The explanation took me longer than I'd like to admit: funnels enforce strict temporal ordering within each trace, and my agent calls the LLM to *plan* before it calls the tool. The first `chat` span in every trace fires before `tool search_tool`, so no trace satisfies "chat after tool," and step three legitimately converts to zero. Fair enough, that's what a funnel means. But notice what the number can't tell you: a step reading 0 looks identical whether the model never ran or ran a thousand times in a different order. Reordering the steps to `agent answer` → `chat gpt-4o-mini` → `tool search_tool` gave me a real conversion rate: 9.09%.
+The explanation took me longer than I'd like to admit: funnels enforce strict temporal ordering within each trace, taking the *first* matching span per step, and my agent calls the LLM to *plan* before it calls the tool. The first `chat` span in every trace fires before `tool search_tool`, so no trace satisfies "chat after tool," and step three legitimately converts to zero. Fair enough, that's what a funnel means. But notice what the number can't tell you: a step reading 0 looks identical whether the model never ran or ran a thousand times in a different order.
+
+![One trace in time order: the funnel timestamps chat at the early plan call, so chat-after-tool matches nothing](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/6-trace-timeline.png)
+
+Reordering the steps to `agent answer` → `chat gpt-4o-mini` → `tool search_tool` gave me a real conversion rate: 9.09%.
+
+And that's before the span-name fragmentation even enters. Under any single name, the LLM step can only ever match the traces of that one model, at most 10 of my 22. Now imagine the realistic production event: a fallback or a version bump quietly retires a model, its span name lingers in your funnel definition, and the step's match count goes to zero for a second reason. That's where it stopped being a quirk and became a crash.
 
 ![Funnel steps join on literal span names; a zero-match step crashes the API](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/2-funnel-join.png)
-
-And that's before the naming problem from the diagram above even enters. Under any single name, the LLM step can only ever match the traces of that one model, at most 10 of my 22. Now imagine the realistic production event: a fallback or a version bump quietly retires a model, its span name lingers in your funnel definition, and the step's match count goes to zero for a second reason. That's where it stopped being a quirk and became a crash.
 
 ## The crash
 
@@ -94,6 +98,10 @@ The fix that held up: wrap the LLM call in a stable parent span. If every model 
 The tempting fix that doesn't work: the step filter clause. Funnel steps do accept an additional filter, and my first thought was to match on a stable attribute like `gen_ai.operation.name = "chat"` instead of the name. But the filter narrows *within* a span-name match rather than replacing it. A step still keys on one literal name, so no attribute filter can stitch `chat gpt-4o-mini` and `chat gemini-3.1-flash-lite` back into one step. Filters are still useful inside a step (scoping to one environment, say), just not for this. Knowing that saves you the hour I would have spent on it.
 
 Two operational habits, both learned the slow way. Before trusting any multi-step funnel, sanity-check each step as a single-step funnel first; that's a fast, honest span count per name, and it's how I proved my zeros were an ordering problem rather than missing data. And order your steps by when the spans actually start inside a trace, not by your mental model of the pipeline. My mental model said the LLM answers last; my traces said the LLM plans first. The funnel believed the traces.
+
+If you hit a zero of your own, this is the whole diagnosis in one picture:
+
+![Decision flowchart: single-step funnel test separates ordering problems from name problems, and either way a zero-converting step 500s the overview API](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/7-zero-flowchart.png)
 
 ## What I took away
 

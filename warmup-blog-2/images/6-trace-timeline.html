@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    background: #ffffff;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a2e;
+  }
+  .canvas { width: 1400px; padding: 72px 80px 64px; }
+  .title { font-size: 30px; font-weight: 600; letter-spacing: -0.01em; color: #1a1a2e; }
+  .subtitle { margin-top: 10px; font-size: 17px; color: #6b7280; font-weight: 400; }
+
+  /* timeline */
+  .timeline { margin-top: 56px; width: 1240px; }
+  .lane { position: relative; height: 56px; margin-bottom: 14px; }
+
+  .bar {
+    position: absolute;
+    top: 0;
+    height: 56px;
+    border-radius: 8px;
+    border: 1.5px solid #d1d5db;
+    background: #ffffff;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    font-family: "SF Mono", "Cascadia Code", "Consolas", "Liberation Mono", monospace;
+    font-size: 17px;
+    color: #374151;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .bar.root { color: #4b5563; }
+  .bar.hl {
+    border-color: #e07b00;
+    border-width: 2px;
+    background: #fff8ef;
+    color: #7a4200;
+  }
+  .bar.muted {
+    border-color: #d1d5db;
+    background: #f6f7f9;
+    color: #9ca3af;
+  }
+
+  /* small-caps tag above the two chat bars */
+  .tag {
+    position: absolute;
+    top: -26px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: #9ca3af;
+  }
+  .tag.amber { color: #e07b00; }
+
+  /* time axis */
+  .axis { margin-top: 10px; width: 1240px; position: relative; height: 22px; }
+  .axis .line {
+    position: absolute; left: 0; right: 0; top: 8px;
+    height: 1.5px; background: #cbd5e1;
+  }
+  .axis .line::after {
+    content: ""; position: absolute; right: 0; top: 50%;
+    width: 9px; height: 9px;
+    border-top: 1.5px solid #cbd5e1;
+    border-right: 1.5px solid #cbd5e1;
+    transform: translateY(-50%) rotate(45deg);
+  }
+  .axis .lbl {
+    position: absolute; right: 4px; top: 18px;
+    font-size: 14px; color: #9ca3af; font-style: italic;
+  }
+
+  /* verdict row */
+  .verdict { margin-top: 48px; display: flex; align-items: center; gap: 0; }
+  .vitem {
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+    font-size: 16px;
+    color: #374151;
+    background: #f3f4f6;
+    padding: 12px 20px;
+    border-radius: 8px;
+    white-space: nowrap;
+  }
+  .vitem .k { color: #9ca3af; }
+  .vitem.fail {
+    background: #fff8ef;
+    border: 1.5px solid #e5b783;
+    color: #7a4200;
+    font-weight: 600;
+  }
+  .vsep { color: #cbd5e1; font-size: 20px; margin: 0 18px; }
+
+  .caption {
+    margin-top: 30px;
+    font-size: 15.5px;
+    color: #6b7280;
+    max-width: 1120px;
+    line-height: 1.6;
+  }
+  .caption code {
+    font-family: "SF Mono", "Cascadia Code", "Consolas", monospace;
+    font-size: 14.5px;
+    color: #374151;
+    background: #f3f4f6;
+    padding: 2px 7px;
+    border-radius: 5px;
+  }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <div class="title">Why step 3 read zero</div>
+    <div class="subtitle">One trace, drawn in time order. The span the funnel counts as &ldquo;chat&rdquo; is the early plan call &mdash; not the answer.</div>
+
+    <div class="timeline">
+      <!-- root span, full width -->
+      <div class="lane">
+        <div class="bar root" style="left: 0; width: 1240px;">agent answer</div>
+      </div>
+
+      <!-- child 1: plan call (amber), early -->
+      <div class="lane">
+        <div class="tag amber" style="left: 40px;">plan</div>
+        <div class="bar hl" style="left: 40px; width: 320px;">chat gpt-4o-mini</div>
+      </div>
+
+      <!-- child 2: tool, middle -->
+      <div class="lane">
+        <div class="bar" style="left: 400px; width: 320px;">tool search_tool</div>
+      </div>
+
+      <!-- child 3: answer call (muted), late -->
+      <div class="lane">
+        <div class="tag" style="left: 760px;">answer</div>
+        <div class="bar muted" style="left: 760px; width: 360px;">chat gpt-4o-mini</div>
+      </div>
+    </div>
+
+    <div class="axis">
+      <div class="line"></div>
+      <div class="lbl">time &rarr;</div>
+    </div>
+
+    <div class="verdict">
+      <div class="vitem"><span class="k">t(chat) =</span> plan call</div>
+      <span class="vsep">&middot;</span>
+      <div class="vitem">t(chat) &lt; t(tool)</div>
+      <span class="vsep">&middot;</span>
+      <div class="vitem fail">step 3 &rarr; 0 traces</div>
+    </div>
+
+    <div class="caption">
+      A funnel step takes the <b>first</b> matching span per trace &mdash; the generated SQL uses <code>minIf(timestamp, name = 'chat gpt-4o-mini')</code>. The same span name appears twice, so &ldquo;chat&rdquo; is timestamped at the plan call. Step 3 requires <code>t3 &gt; t2</code> (chat after tool), but the first chat lands before the tool &mdash; so the ordered join matches nothing.
+    </div>
+  </div>
+</body>
+</html>
