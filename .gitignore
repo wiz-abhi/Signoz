@@ -3,3 +3,4 @@ __pycache__/
 token_dump.json
 *.pyc
 warmup-blog-2/scratch/
+warmup-agent/devto_preview/
