@@ -32,6 +32,8 @@ That's 44 chat spans across 22 traces, split three ways by model. The `agent ans
 
 ![Agent reasoning loop: one logical LLM step fragments into three span names](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/1-span-fragmentation.png)
 
+*One logical step in my agent's loop, three literal span names in ClickHouse. The GenAI spec puts the model in the span name, so every model switch forks the step.*
+
 Here's the naming, straight from my agent:
 
 ```python
@@ -46,9 +48,13 @@ My first funnel had three steps in the order I think of my agent: `agent answer`
 
 ![The agent-pipeline funnel configured in SigNoz: three steps on the warmup-agent service](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/3-funnel-ui.png)
 
+*The funnel builder. Each step is a service plus a literal span name, with an optional filter and a latency pointer. Note step 3 measures from end of span.*
+
 Steps one and two matched 22 out of 22. Step three matched zero.
 
 ![Funnel results: 22 and 22 span bars, then 0 with a 100% drop, while the overview panel shows No data](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/4-funnel-results.png)
+
+*22, 22, then nothing. Step 1 to Step 2 converts at 100.00%, and the overall metrics panel just shows "No data" instead of a number. That "No data" is hiding an HTTP 500.*
 
 Zero. For a model that demonstrably ran in ten traces. At first I assumed I'd broken my own instrumentation. That's the honest reflex: when a tool shows zeros on your data, you suspect your data. I went back to my exporter config, re-checked the span names against ClickHouse, even built a one-step funnel containing only `chat gpt-4o-mini`. That one matched 10 traces. So the spans exist, the names are right, and the funnel still says zero when the step sits third.
 
@@ -56,11 +62,15 @@ The explanation took me longer than I'd like to admit: funnels enforce strict te
 
 ![One trace in time order: the funnel timestamps chat at the early plan call, so chat-after-tool matches nothing](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/6-trace-timeline.png)
 
+*The same span name appears twice per trace, and the funnel only sees the first one. My agent's plan call is timestamped before the tool, so "chat after tool" matches nothing, even though the answer call happens later.*
+
 Reordering the steps to `agent answer` → `chat gpt-4o-mini` → `tool search_tool` gave me a real conversion rate: 9.09%.
 
 And that's before the span-name fragmentation even enters. Under any single name, the LLM step can only ever match the traces of that one model, at most 10 of my 22. Now imagine the realistic production event: a fallback or a version bump quietly retires a model, its span name lingers in your funnel definition, and the step's match count goes to zero for a second reason. That's where it stopped being a quirk and became a crash.
 
 ![Funnel steps join on literal span names; a zero-match step crashes the API](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/2-funnel-join.png)
+
+*Two ways to reach zero. A partial name match just lowers the count; a name that matches nothing at all takes the overview endpoint down with it.*
 
 ## The crash
 
@@ -71,6 +81,8 @@ app.ApiResponse.Data: []*v3.Row: v3.Row.Data: unsupported value: NaN
 ```
 
 ![The verbatim request and 500 NaN response from the funnel overview endpoint](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/5-funnel-500.png)
+
+*The actual exchange, unedited. Same funnel, same time window; the only change is a step naming a model that never emitted a span.*
 
 A step that matches nothing should be a zero-percent conversion. Zero is a perfectly good answer to "how many made it this far." Instead a zero-converting final step produces a `NaN` the response can't carry, the request dies with a 500, and the UI papers over it as "No data." I re-verified all of this today against my live instance; the exact curl commands, request bodies, and responses are in [the repo](https://github.com/wiz-abhi/Signoz/blob/main/warmup-blog-2/evidence/funnel-api-repro.md) if you want to reproduce it end to end (creating funnels needs an editor or admin token; a read-only key gets a 403).
 
@@ -102,6 +114,8 @@ Two operational habits, both learned the slow way. Before trusting any multi-ste
 If you hit a zero of your own, this is the whole diagnosis in one picture:
 
 ![Decision flowchart: single-step funnel test separates ordering problems from name problems, and either way a zero-converting step 500s the overview API](https://raw.githubusercontent.com/wiz-abhi/Signoz/main/warmup-blog-2/images/7-zero-flowchart.png)
+
+*One check splits the two failure modes. Build a single-step funnel on the span name in question: if it matches spans you have an ordering problem, if it doesn't you have a naming problem.*
 
 ## What I took away
 
